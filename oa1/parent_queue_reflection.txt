@@ -1,0 +1,9 @@
+Иерархия сделана правильно.
+
+ctor: правильно.
+enqueue (в эталоне add_tail): правильно.
+dequeue (в эталоне remove_front): правильно.
+get (в эталоне get_front): правильно.
+add_front: правильно.
+remove_tail: правильно.
+get_tail: правильно.
