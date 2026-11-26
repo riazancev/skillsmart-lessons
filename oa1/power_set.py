@@ -1,0 +1,203 @@
+from enum import IntEnum
+
+
+class HashTable:
+
+    _EMPTY = object()
+    _DELETED = object()
+
+    class Put(IntEnum):
+        NIL = 0
+        OK = 1
+        ERR = 2
+
+    class Remove(IntEnum):
+        NIL = 0
+        OK = 1
+        ERR = 2
+
+    ## Ctor
+
+    # pre: max_size > 0
+    # post: empty table; capacity() >= 1; statuses are NIL
+    def __init__(self, max_size: int) -> None:
+        if max_size < 1:
+            max_size = 1
+        self._capacity = max_size
+        self.clear()
+
+    ## Commands
+
+    # pre: value is already stored, or a free slot exists
+    # post: value is stored
+    def put(self, value: object) -> None:
+        if self._find(value) != -1:
+            self._put_status = HashTable.Put.OK
+        else:
+            index = self._free_slot(value)
+            if index == -1:
+                self._put_status = HashTable.Put.ERR
+            else:
+                self._slots[index] = value
+                self._count += 1
+                self._put_status = HashTable.Put.OK
+
+    # pre: value is stored
+    # post: value is not stored
+    def remove(self, value: object) -> None:
+        index = self._find(value)
+        if index == -1:
+            self._remove_status = HashTable.Remove.ERR
+        else:
+            self._slots[index] = HashTable._DELETED
+            self._count -= 1
+            self._remove_status = HashTable.Remove.OK
+
+    # post: empty table; statuses are NIL
+    def clear(self) -> None:
+        self._slots = [HashTable._EMPTY] * self._capacity
+        self._count = 0
+        self._put_status = HashTable.Put.NIL
+        self._remove_status = HashTable.Remove.NIL
+
+    ## Queries
+
+    # true when the value is stored
+    def contains(self, value: object) -> bool:
+        return self._find(value) != -1
+
+    def size(self) -> int:
+        return self._count
+
+    def capacity(self) -> int:
+        return self._capacity
+
+    ## Statuses
+
+    def get_put_status(self) -> int:
+        return self._put_status
+
+    def get_remove_status(self) -> int:
+        return self._remove_status
+
+    def _index(self, value: object, offset: int) -> int:
+        start = hash(value) % self._capacity
+        return (start + offset) % self._capacity
+
+    def _find(self, value: object) -> int:
+        for offset in range(self._capacity):
+            index = self._index(value, offset)
+            item = self._slots[index]
+            if item is HashTable._EMPTY:
+                return -1
+            if item is not HashTable._DELETED and item == value:
+                return index
+        return -1
+
+    def _free_slot(self, value: object) -> int:
+        found = -1
+        for offset in range(self._capacity):
+            index = self._index(value, offset)
+            item = self._slots[index]
+            if item is HashTable._EMPTY:
+                if found == -1:
+                    return index
+                return found
+            if item is HashTable._DELETED and found == -1:
+                found = index
+        return found
+
+
+class PowerSet(HashTable):
+
+    class Put(IntEnum):
+        NIL = 0
+        OK = 1
+        ERR = 2
+        PRESENT = 3
+
+    ## Ctor
+
+    # pre: max_size > 0
+    # post: empty set; capacity() == max(max_size, 1); statuses are NIL
+    def __init__(self, max_size: int) -> None:
+        super().__init__(max_size)
+
+    ## Commands
+
+    # pre: value is already stored, or size() < capacity()
+    # post: PRESENT and size unchanged when the value was stored; OK and size grows by one when it was absent and a slot exists; ERR and the set unchanged when it was absent and no slot remains
+    def put(self, value: object) -> None:
+        if self.contains(value):
+            self._put_status = PowerSet.Put.PRESENT
+            return
+        super().put(value)
+
+    ## Queries
+
+    # post: new set of values stored in both sets; its capacity() equals self.capacity(); statuses are NIL
+    def intersection(self, other: "PowerSet") -> "PowerSet":
+        result = PowerSet(self.capacity())
+        source: PowerSet = self
+        probe: PowerSet = other
+        if other.size() < self.size():
+            source = other
+            probe = self
+        for value in source._stored():
+            if probe.contains(value):
+                result.put(value)
+        result._quiet()
+        return result
+
+    # post: new set of values stored in either set; its capacity() is the sum of both capacities; statuses are NIL
+    def union(self, other: "PowerSet") -> "PowerSet":
+        result = PowerSet(self.capacity() + other.capacity())
+        for value in self._stored():
+            result.put(value)
+        for value in other._stored():
+            result.put(value)
+        result._quiet()
+        return result
+
+    # post: new set of values stored in self and absent from other; its capacity() equals self.capacity(); statuses are NIL
+    def difference(self, other: "PowerSet") -> "PowerSet":
+        result = PowerSet(self.capacity())
+        for value in self._stored():
+            if not other.contains(value):
+                result.put(value)
+        result._quiet()
+        return result
+
+    # post: true when every value of other is stored in self
+    def is_subset(self, other: "PowerSet") -> bool:
+        if other.size() > self.size():
+            return False
+        for value in other._stored():
+            if not self.contains(value):
+                return False
+        return True
+
+    # post: true when both sets store the same values
+    def equals(self, other: "PowerSet") -> bool:
+        if self.size() != other.size():
+            return False
+        for value in self._stored():
+            if not other.contains(value):
+                return False
+        return True
+
+    def _stored(self) -> list[object]:
+        stored: list[object] = []
+        empty = HashTable._EMPTY
+        deleted = HashTable._DELETED
+        for item in self._slots:
+            if item is empty or item is deleted:
+                continue
+            stored.append(item)
+        return stored
+
+    def _quiet(self) -> None:
+        self._put_status = PowerSet.Put.NIL
+        self._remove_status = HashTable.Remove.NIL
+
+
